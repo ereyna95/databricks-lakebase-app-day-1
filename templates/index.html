@@ -142,63 +142,160 @@
       }
     }
     
-    .table-container {
+    .watchlist-grid {
       margin-top: 40px;
-      overflow-x: auto;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 24px;
     }
     
-    table {
-      width: 100%;
-      border-collapse: collapse;
+    .stock-card {
       background: white;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+      border: 2px solid transparent;
+      position: relative;
+      overflow: hidden;
     }
     
-    thead {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    .stock-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+      border-color: #667eea;
     }
     
-    th {
-      text-align: left;
-      padding: 16px;
-      font-size: 12px;
-      color: white;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      font-weight: 600;
+    .stock-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
     }
     
-    tbody tr {
-      border-bottom: 1px solid #e2e8f0;
-      transition: all 0.2s ease;
+    .stock-identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
     }
     
-    tbody tr:last-child {
-      border-bottom: none;
-    }
-    
-    tbody tr:hover {
+    .stock-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      object-fit: contain;
       background: #f7fafc;
-      transform: scale(1.01);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      padding: 4px;
     }
     
-    td {
-      padding: 16px;
-      color: #2d3748;
-      font-size: 14px;
+    .stock-info {
+      flex: 1;
     }
     
-    td:nth-child(3) {
-      font-weight: 600;
-      color: #48bb78;
-      font-size: 15px;
+    .stock-symbol {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 2px;
     }
     
-    td:nth-child(4) {
-      color: #718096;
+    .stock-company {
       font-size: 13px;
+      color: #718096;
+      line-height: 1.4;
+    }
+    
+    .stock-price-section {
+      margin: 16px 0;
+      padding: 16px;
+      background: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 100%);
+      border-radius: 8px;
+    }
+    
+    .stock-price {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 4px;
+    }
+    
+    .stock-change {
+      font-size: 14px;
+      font-weight: 600;
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    
+    .stock-change.positive {
+      color: #22c55e;
+      background: #dcfce7;
+    }
+    
+    .stock-change.negative {
+      color: #ef4444;
+      background: #fee2e2;
+    }
+    
+    .stock-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+    
+    .metric {
+      background: #f7fafc;
+      padding: 12px;
+      border-radius: 6px;
+    }
+    
+    .metric-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #718096;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    
+    .metric-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #2d3748;
+    }
+    
+    .stock-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0;
+    }
+    
+    .tag {
+      font-size: 11px;
+      padding: 4px 10px;
+      background: #667eea;
+      color: white;
+      border-radius: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    
+    .stock-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+    
+    .stock-updated {
+      font-size: 12px;
+      color: #a0aec0;
     }
     
     .delete-btn {
@@ -235,12 +332,16 @@
         font-size: 24px;
       }
       
-      table {
-        font-size: 12px;
+      .watchlist-grid {
+        grid-template-columns: 1fr;
       }
       
-      th, td {
-        padding: 12px 8px;
+      .stock-price {
+        font-size: 24px;
+      }
+      
+      .stock-metrics {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -248,7 +349,7 @@
 <body>
   <div class="container">
     <h1>📈 Stock Watchlist</h1>
-    <p class="hint">Enter a single ticker symbol. This sends exactly ONE call to the Massive API to fetch the latest price, then adds it to your watchlist.</p>
+    <p class="hint">Enter a ticker symbol to fetch comprehensive stock data including company details, market metrics, and real-time pricing from the Massive API.</p>
 
     <form id="stock-form">
       <label for="symbol">Ticker symbol</label>
@@ -258,26 +359,31 @@
 
     <div id="result"></div>
 
-    <div class="table-container">
-      <table id="watchlist-table">
-        <thead>
-          <tr>
-            <th>Symbol</th>
-            <th>Email</th>
-            <th>Latest price</th>
-            <th>Updated</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="watchlist-body"></tbody>
-      </table>
-    </div>
+    <div class="watchlist-grid" id="watchlist-grid"></div>
   </div>
 
   <script>
     const form = document.getElementById("stock-form");
     const resultEl = document.getElementById("result");
-    const watchlistBody = document.getElementById("watchlist-body");
+    const watchlistGrid = document.getElementById("watchlist-grid");
+
+    function formatNumber(num, decimals = 2) {
+      if (num === null || num === undefined) return "-";
+      return Number(num).toFixed(decimals);
+    }
+
+    function formatLargeNumber(num) {
+      if (num === null || num === undefined) return "-";
+      const billion = 1e9;
+      const million = 1e6;
+      if (num >= billion) {
+        return "$" + (num / billion).toFixed(2) + "B";
+      } else if (num >= million) {
+        return "$" + (num / million).toFixed(2) + "M";
+      } else {
+        return "$" + formatNumber(num, 0);
+      }
+    }
 
     async function loadWatchlist() {
       try {
@@ -287,21 +393,91 @@
           resultEl.textContent = "Error loading watchlist: " + (data.error || resp.statusText);
           return;
         }
-        watchlistBody.innerHTML = "";
-        data.forEach((row) => {
-          const tr = document.createElement("tr");
-          const price = row.latest_price !== null && row.latest_price !== undefined
-            ? "$" + Number(row.latest_price).toFixed(2)
+        watchlistGrid.innerHTML = "";
+        
+        if (data.length === 0) {
+          watchlistGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #718096;">Your watchlist is empty. Add a stock to get started!</div>';
+          return;
+        }
+        
+        data.forEach((stock) => {
+          const card = document.createElement("div");
+          card.className = "stock-card";
+          
+          const price = stock.latest_price !== null && stock.latest_price !== undefined
+            ? "$" + formatNumber(stock.latest_price)
             : "-";
-          const updated = row.updated_at ? new Date(row.updated_at).toLocaleString() : "-";
-          tr.innerHTML = `
-            <td>${row.symbol}</td>
-            <td>${row.email || "-"}</td>
-            <td>${price}</td>
-            <td>${updated}</td>
-            <td><button class="delete-btn" data-symbol="${row.symbol}">Delete</button></td>
+          const updated = stock.updated_at 
+            ? new Date(stock.updated_at).toLocaleString()
+            : "-";
+          
+          // Format percent change
+          let changeHtml = '';
+          if (stock.percent_change !== null && stock.percent_change !== undefined) {
+            const changeClass = stock.percent_change >= 0 ? 'positive' : 'negative';
+            const changeSymbol = stock.percent_change >= 0 ? '▲' : '▼';
+            changeHtml = `<span class="stock-change ${changeClass}">${changeSymbol} ${Math.abs(stock.percent_change).toFixed(2)}%</span>`;
+          }
+          
+          // Build company logo or fallback
+          let logoHtml = '';
+          if (stock.logo_url) {
+            logoHtml = `<img src="${stock.logo_url}" alt="${stock.symbol} logo" class="stock-logo" onerror="this.style.display='none'">`;
+          }
+          
+          // Build tags for sector/industry
+          let tagsHtml = '';
+          if (stock.sector || stock.industry) {
+            tagsHtml = '<div class="stock-tags">';
+            if (stock.sector) tagsHtml += `<span class="tag">${stock.sector}</span>`;
+            if (stock.industry) tagsHtml += `<span class="tag">${stock.industry}</span>`;
+            tagsHtml += '</div>';
+          }
+          
+          card.innerHTML = `
+            <div class="stock-header">
+              <div class="stock-identity">
+                ${logoHtml}
+                <div class="stock-info">
+                  <div class="stock-symbol">${stock.symbol}</div>
+                  <div class="stock-company">${stock.company_name || stock.symbol}</div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="stock-price-section">
+              <div class="stock-price">${price}</div>
+              ${changeHtml}
+            </div>
+            
+            <div class="stock-metrics">
+              <div class="metric">
+                <div class="metric-label">Day High</div>
+                <div class="metric-value">${formatNumber(stock.day_high)}</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Day Low</div>
+                <div class="metric-value">${formatNumber(stock.day_low)}</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Volume</div>
+                <div class="metric-value">${stock.volume ? Number(stock.volume).toLocaleString() : '-'}</div>
+              </div>
+              <div class="metric">
+                <div class="metric-label">Market Cap</div>
+                <div class="metric-value">${formatLargeNumber(stock.market_cap)}</div>
+              </div>
+            </div>
+            
+            ${tagsHtml}
+            
+            <div class="stock-footer">
+              <div class="stock-updated">Updated: ${updated}</div>
+              <button class="delete-btn" data-symbol="${stock.symbol}">Remove</button>
+            </div>
           `;
-          watchlistBody.appendChild(tr);
+          
+          watchlistGrid.appendChild(card);
         });
       } catch (err) {
         resultEl.textContent = "Failed to load watchlist: " + err;
@@ -327,7 +503,7 @@
     }
 
     // Event delegation for delete buttons
-    watchlistBody.addEventListener("click", (e) => {
+    watchlistGrid.addEventListener("click", (e) => {
       if (e.target.classList.contains("delete-btn")) {
         const symbol = e.target.getAttribute("data-symbol");
         if (symbol && confirm("Are you sure you want to remove " + symbol + " from your watchlist?")) {
@@ -352,7 +528,9 @@
           resultEl.textContent = "Error: " + (data.error || resp.statusText);
           return;
         }
-        resultEl.textContent = "✓ Successfully added " + data.symbol + " at $" + Number(data.latest_price).toFixed(2);
+        const companyInfo = data.company_name ? " (" + data.company_name + ")" : "";
+        const priceInfo = data.latest_price ? " at $" + Number(data.latest_price).toFixed(2) : "";
+        resultEl.textContent = "✓ Successfully added " + data.symbol + companyInfo + priceInfo;
         document.getElementById("symbol").value = "";
         loadWatchlist();
       } catch (err) {
