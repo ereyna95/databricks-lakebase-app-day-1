@@ -50,27 +50,48 @@ def ensure_table():
 
 def ensure_watchlist_table():
     """Create the watchlist table in Lakebase if it doesn't exist yet."""
+    # Create the base table if it doesn't exist
     lakebase.run_write(
         f"""
         CREATE TABLE IF NOT EXISTS {WATCHLIST_TABLE_NAME} (
             symbol TEXT NOT NULL,
             email TEXT NOT NULL,
             latest_price NUMERIC,
-            company_name TEXT,
-            description TEXT,
-            market_cap NUMERIC,
-            sector TEXT,
-            industry TEXT,
-            logo_url TEXT,
-            day_high NUMERIC,
-            day_low NUMERIC,
-            volume BIGINT,
-            percent_change NUMERIC,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (symbol, email)
         )
         """
     )
+    
+    # Migrate existing table by adding new columns if they don't exist
+    _migrate_watchlist_table()
+
+
+def _migrate_watchlist_table():
+    """Add new columns to the watchlist table if they don't exist yet."""
+    new_columns = [
+        ("company_name", "TEXT"),
+        ("description", "TEXT"),
+        ("market_cap", "NUMERIC"),
+        ("sector", "TEXT"),
+        ("industry", "TEXT"),
+        ("logo_url", "TEXT"),
+        ("day_high", "NUMERIC"),
+        ("day_low", "NUMERIC"),
+        ("volume", "BIGINT"),
+        ("percent_change", "NUMERIC"),
+    ]
+    
+    for column_name, column_type in new_columns:
+        try:
+            lakebase.run_write(
+                f"ALTER TABLE {WATCHLIST_TABLE_NAME} ADD COLUMN IF NOT EXISTS {column_name} {column_type}"
+            )
+        except Exception as e:
+            # Some Postgres versions don't support IF NOT EXISTS in ALTER TABLE,
+            # so we catch the exception if the column already exists
+            if "already exists" not in str(e).lower():
+                logger.warning(f"Could not add column {column_name}: {e}")
 
 
 def _current_user_email() -> str:
