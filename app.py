@@ -56,6 +56,16 @@ def ensure_watchlist_table():
             symbol TEXT NOT NULL,
             email TEXT NOT NULL,
             latest_price NUMERIC,
+            company_name TEXT,
+            description TEXT,
+            market_cap NUMERIC,
+            sector TEXT,
+            industry TEXT,
+            logo_url TEXT,
+            day_high NUMERIC,
+            day_low NUMERIC,
+            volume BIGINT,
+            percent_change NUMERIC,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (symbol, email)
         )
@@ -138,12 +148,19 @@ def sync_from_massive():
 
 @app.route("/watchlist", methods=["GET"])
 def get_watchlist():
-    """Return the current user's watchlist symbols, with their last known price."""
+    """Return the current user's watchlist symbols with all rich data fields."""
     ensure_watchlist_table()
     email = _current_user_email()
     rows = lakebase.run_query(
-        f"SELECT symbol, email, latest_price, updated_at FROM {WATCHLIST_TABLE_NAME} "
-        f"WHERE email = %s ORDER BY symbol ASC",
+        f"""
+        SELECT 
+            symbol, email, latest_price, company_name, description,
+            market_cap, sector, industry, logo_url, day_high, day_low,
+            volume, percent_change, updated_at
+        FROM {WATCHLIST_TABLE_NAME}
+        WHERE email = %s 
+        ORDER BY symbol ASC
+        """,
         (email,),
     )
     return jsonify(rows)
@@ -175,9 +192,9 @@ def delete_from_watchlist(symbol):
 @app.route("/watchlist", methods=["POST"])
 def add_to_watchlist():
     """
-    Fetch the latest price for a single stock symbol from Massive using
-    exactly ONE API call (see MassiveClient.get_latest_price), then add/
-    update that symbol on the watchlist in Lakebase.
+    Fetch the latest price AND comprehensive ticker details for a single stock
+    symbol from Massive, then add/update that symbol on the watchlist in Lakebase
+    with all rich data fields.
     """
     ensure_watchlist_table()
 
@@ -192,32 +209,78 @@ def add_to_watchlist():
         return jsonify({"error": f"Invalid ticker symbol: {symbol!r}"}), 400
 
     client = MassiveClient()
+    
+    # Fetch latest price data
     try:
-        data = client.get_latest_price(symbol)  # <-- single API call, latest price only
+        price_data = client.get_latest_price(symbol)
     except requests.HTTPError:
-        # Massive returns a 404/4xx for tickers it doesn't recognize.
         return jsonify({"error": f"Unknown ticker symbol: {symbol}"}), 400
 
-    price = _extract_latest_price(data)
+    price = _extract_latest_price(price_data)
     if price is None:
-        # No usable price in the response (e.g. delisted/invalid ticker
-        # that still 200s with an empty result set) - don't add it.
         return jsonify({"error": f"No price data available for ticker: {symbol}"}), 400
+
+    # Extract additional price fields (high, low, volume, percent change)
+    price_details = _extract_price_details(price_data)
+    
+    # Fetch comprehensive ticker details (company info, fundamentals)
+    ticker_details = {}
+    try:
+        details_data = client.get_ticker_details(symbol)
+        ticker_details = _extract_ticker_details(details_data)
+    except requests.HTTPError as e:
+        # If ticker details fail, log but continue with just price data
+        logger.warning(f"Could not fetch ticker details for {symbol}: {e}")
 
     email = _current_user_email()
 
+    # Combine all data for insertion
     lakebase.run_write(
         f"""
-        INSERT INTO {WATCHLIST_TABLE_NAME} (symbol, email, latest_price, updated_at)
-        VALUES (%s, %s, %s, now())
+        INSERT INTO {WATCHLIST_TABLE_NAME} (
+            symbol, email, latest_price, company_name, description,
+            market_cap, sector, industry, logo_url, day_high, day_low,
+            volume, percent_change, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
         ON CONFLICT (symbol, email) DO UPDATE
             SET latest_price = EXCLUDED.latest_price,
+                company_name = EXCLUDED.company_name,
+                description = EXCLUDED.description,
+                market_cap = EXCLUDED.market_cap,
+                sector = EXCLUDED.sector,
+                industry = EXCLUDED.industry,
+                logo_url = EXCLUDED.logo_url,
+                day_high = EXCLUDED.day_high,
+                day_low = EXCLUDED.day_low,
+                volume = EXCLUDED.volume,
+                percent_change = EXCLUDED.percent_change,
                 updated_at = EXCLUDED.updated_at
         """,
-        (symbol, email, price),
+        (
+            symbol,
+            email,
+            price,
+            ticker_details.get("company_name"),
+            ticker_details.get("description"),
+            ticker_details.get("market_cap"),
+            ticker_details.get("sector"),
+            ticker_details.get("industry"),
+            ticker_details.get("logo_url"),
+            price_details.get("day_high"),
+            price_details.get("day_low"),
+            price_details.get("volume"),
+            price_details.get("percent_change"),
+        ),
     )
 
-    return jsonify({"symbol": symbol, "email": email, "latest_price": price})
+    return jsonify({
+        "symbol": symbol,
+        "email": email,
+        "latest_price": price,
+        **ticker_details,
+        **price_details,
+    })
 
 
 def _extract_latest_price(data: dict) -> float | None:
@@ -247,6 +310,77 @@ def _extract_latest_price(data: dict) -> float | None:
             if key in results:
                 return results[key]
     return None
+
+
+def _extract_price_details(data: dict) -> dict:
+    """Extract additional price fields from the /prev endpoint response.
+    
+    Returns a dict with day_high, day_low, volume, and percent_change.
+    The /v2/aggs/ticker/{symbol}/prev response shape:
+        {"status": "OK", "results": [{"h": high, "l": low, "v": volume, ...}]}
+    """
+    details = {
+        "day_high": None,
+        "day_low": None,
+        "volume": None,
+        "percent_change": None,
+    }
+    
+    if not isinstance(data, dict):
+        return details
+    
+    results = data.get("results", [])
+    if isinstance(results, list) and results:
+        result = results[0]
+        if isinstance(result, dict):
+            details["day_high"] = result.get("h")
+            details["day_low"] = result.get("l")
+            details["volume"] = result.get("v")
+            
+            # Calculate percent change if open and close are available
+            open_price = result.get("o")
+            close_price = result.get("c")
+            if open_price and close_price and open_price > 0:
+                details["percent_change"] = ((close_price - open_price) / open_price) * 100
+    
+    return details
+
+
+def _extract_ticker_details(data: dict) -> dict:
+    """Extract company fundamentals from the /v3/reference/tickers/{symbol} response.
+    
+    Returns a dict with company_name, description, market_cap, sector, industry, logo_url.
+    The API response shape:
+        {"status": "OK", "results": {"name": "...", "market_cap": ..., ...}}
+    """
+    details = {
+        "company_name": None,
+        "description": None,
+        "market_cap": None,
+        "sector": None,
+        "industry": None,
+        "logo_url": None,
+    }
+    
+    if not isinstance(data, dict):
+        return details
+    
+    results = data.get("results", {})
+    if isinstance(results, dict):
+        details["company_name"] = results.get("name")
+        details["description"] = results.get("description")
+        details["market_cap"] = results.get("market_cap")
+        
+        # Sector and industry might be nested or at top level depending on API version
+        details["sector"] = results.get("sector") or results.get("sic_description")
+        details["industry"] = results.get("industry") or results.get("sic_code")
+        
+        # Logo URL might be under branding
+        branding = results.get("branding", {})
+        if isinstance(branding, dict):
+            details["logo_url"] = branding.get("logo_url") or branding.get("icon_url")
+    
+    return details
 
 
 def _upsert_batch(items: list[dict]) -> int:

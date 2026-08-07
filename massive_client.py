@@ -85,3 +85,48 @@ class MassiveClient:
         """
         data = self.get(f"/v2/aggs/ticker/{symbol}/prev")
         return data
+
+    def get_ticker_details(self, symbol: str) -> dict:
+        """
+        Fetch comprehensive ticker details including company name, description,
+        market cap, sector, industry, and other fundamentals.
+        Endpoint: /v3/reference/tickers/{symbol}
+        """
+        data = self.get(f"/v3/reference/tickers/{symbol}")
+        return data
+
+    def get_historical_data(
+        self,
+        symbol: str,
+        from_date: str,
+        to_date: str,
+        timespan: str = "day",
+        multiplier: int = 1,
+    ) -> dict:
+        """
+        Fetch historical OHLCV (Open, High, Low, Close, Volume) data for a symbol
+        over a date range.
+        Endpoint: /v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{from}/{to}
+        
+        Args:
+            symbol: Stock ticker symbol
+            from_date: Start date in YYYY-MM-DD format
+            to_date: End date in YYYY-MM-DD format
+            timespan: Time unit (minute, hour, day, week, month, quarter, year)
+            multiplier: Size of the timespan multiplier (e.g., 1 = 1 day, 5 = 5 days)
+        """
+        path = f"/v2/aggs/ticker/{symbol}/range/{multiplier}/{timespan}/{from_date}/{to_date}"
+        data = self.get(path)
+        return data
+
+    def get_ticker_news(self, symbol: str, limit: int = 10) -> dict:
+        """
+        Fetch recent news articles for a ticker symbol.
+        Endpoint: /v2/reference/news
+        
+        Args:
+            symbol: Stock ticker symbol
+            limit: Maximum number of news articles to return (default 10)
+        """
+        data = self.get("/v2/reference/news", params={"ticker": symbol, "limit": limit})
+        return data
